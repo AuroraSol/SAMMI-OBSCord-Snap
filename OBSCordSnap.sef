@@ -1,105 +1,117 @@
 [extension_name]
 OBSCord Snap
+[extension_info]
 [insert_external]
 <div>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/obs-websocket-js@4.0.2/dist/obs-websocket.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.1/dist/obs-ws.js"></script>
   <p>OBSCord Snap v1 by Silverlink - <small>Uploads your OBS Source Screenshots directly to Discord through a Webhook</small></p>
 </div>
 [insert_command]
-lioranboardclient.send('{"type": "MESSAGE", "topic": "ExtensionCommand", "name": "OBSCord Snap","boxcount": 6,	"boxname1": "webhookURL",	"boxtype1": "string",	"boxname2": "obswsURL",	"boxtype2": "string",	"boxname3": "obswsPass", "boxtype3": "string",	"boxname4": "sourceName",	"boxtype4": "string",	"boxname5": "filePath",	"boxtype5": "string", "boxname6": "optionalText",	"boxtype6": "string"}');
+SAMMI.extCommand("OBSCord Snap", 3355443, 52, {
+    webhookURL: ["Webhook URL", 14, ""],
+    obswsURL: ["OBS Websocket URL", 14, ""],
+    obswsPass: ["OBS Websocket password", 14, ""],
+    sourceName: ["Source Name", 14, ""],
+    filePath: ["File Path", 14, ""],
+    optionalText: ["Optional Text", 14, ""]
+});
 [insert_hook]
-case "OBSCordSnap":{
-	OBSCordSnap(LioranBoardJSON.webhookURL,LioranBoardJSON.obswsURL,LioranBoardJSON.obswsPass,LioranBoardJSON.sourceName,LioranBoardJSON.filePath, LioranBoardJSON.optionalText);
+case "OBSCord Snap":{
+	OBSCordSnap(SAMMIJSON.webhookURL,SAMMIJSON.obswsURL,SAMMIJSON.obswsPass,SAMMIJSON.sourceName,SAMMIJSON.filePath, SAMMIJSON.optionalText);
 } break
 [insert_script]
 async function OBSCordSnap(webhookURL, obswsURL, obswsPass, sourceName, filePath, optionalText) {
-  function Base64ToBlob(b64Data, contentType, sliceSize) {
-    contentType = contentType || '';
-    sliceSize = sliceSize || 512;
+    function Base64ToBlob(b64Data, contentType, sliceSize) {
+        contentType = contentType || '';
+        sliceSize = sliceSize || 512;
 
-    var byteCharacters = atob(b64Data);
-    var byteArrays = [];
+        var byteCharacters = atob(b64Data);
+        var byteArrays = [];
 
-    for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-        var slice = byteCharacters.slice(offset, offset + sliceSize);
+        for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+            var slice = byteCharacters.slice(offset, offset + sliceSize);
 
-        var byteNumbers = new Array(slice.length);
-        for (var i = 0; i < slice.length; i++) {
-            byteNumbers[i] = slice.charCodeAt(i);
+            var byteNumbers = new Array(slice.length);
+            for (var i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+            }
+
+            var byteArray = new Uint8Array(byteNumbers);
+
+            byteArrays.push(byteArray);
         }
 
-        var byteArray = new Uint8Array(byteNumbers);
-
-        byteArrays.push(byteArray);
+        var blob = new Blob(byteArrays, { type: contentType });
+        return blob;
     }
 
-    var blob = new Blob(byteArrays, {type: contentType});
-    return blob;
-  }
+    if (filePath.includes('%')) {
+        SAMMI.alert("OBSCordSnap: You have used a % in your filePath variable. Please use absolute file paths!");
+        SAMMI.alert("Absolute paths look like this: C:/foldername/filename.png");
+        return
+    }
 
-  if (filePath.includes('%')) {
-    lioranboardclient.send('{"type":"MESSAGE","topic":"AlertMessage","message":"OBSCordSnap: You have used a % in your filePath variable. Please use absolute file paths!"}');
-    lioranboardclient.send('{"type":"MESSAGE","topic":"AlertMessage","message":"Absolute paths look like this: C:/foldername/filename.png"}');
-    return
-  }
+    obswsURL = obswsURL || 'localhost:4455';
+    if (!(obswsURL.startsWith("ws://") || obswsURL.startsWith("wss://")))
+        obswsURL = "ws://" + obswsURL;
+    obswsPass = obswsPass || '';
+    optionalText = (optionalText === '0') ? '' : (optionalText || '');
 
-  obswsURL = obswsURL || 'localhost:4444';
-  obswsPass = obswsPass || '';
-  optionalText = (optionalText === '0') ? '' : (optionalText || '');
-  
-  const obs = new OBSWebSocket();
+    const obs = new OBSWebSocket();
 
-  obs.connect({
-    address: obswsURL,
-    password: obswsPass
-  });
+    await obs.connect(obswsURL, obswsPass);
 
-  obs.on('AuthenticationSuccess', async () => {
     try {
-      let screenshotData = await obs.send('TakeSourceScreenshot', {
-        "sourceName": sourceName,
-        "embedPictureFormat": "png",
-        "saveToFilePath": filePath
-      });
+        let screenshotData = await obs.call('GetSourceScreenshot', {
+            "sourceName": sourceName,
+            "imageFormat": "png"
+        });
 
-      let imgFile = (screenshotData.img);
-      let block = imgFile.split(";");
-      let contentType = block[0].split(":")[1];
-      let encodedImage = block[1].split(",")[1];
-      let blob = Base64ToBlob(encodedImage, contentType);			
-    
-      let formData = new FormData();
-      formData.append("image", blob, "OBSCord Snap.png");
-      formData.append("payload_json", `{"content": "${optionalText}"}`);
+        if(filePath)
+          await obs.call('SaveSourceScreenshot', {
+            "sourceName": sourceName,
+            "imageFormat": "png",
+            "imageFilePath": filePath
+        });
 
-      let requestOptions = {
-        method: 'POST',
-        body: formData,
-        redirect: 'follow'
-      };
+        let imgFile = (screenshotData.imageData);
+        let block = imgFile.split(";");
+        let contentType = block[0].split(":")[1];
+        let encodedImage = block[1].split(",")[1];
+        let blob = Base64ToBlob(encodedImage, contentType);
 
-      let response = await fetch(webhookURL, requestOptions);
+        let formData = new FormData();
+        formData.append("image", blob, "OBSCord Snap.png");
+        formData.append("payload_json", `{"content": "${optionalText}"}`);
 
-      if (response.status == 401) {
-        throw "Invalid webhookURL or webhook Token."
-      }
+        let requestOptions = {
+            method: 'POST',
+            body: formData,
+            redirect: 'follow'
+        };
 
-      lioranboardclient.send(`{"type":"MESSAGE","topic":"AlertMessage","message":"Screenshot saved to discord!"}`);
+        let response = await fetch(webhookURL, requestOptions);
+
+        if (response.status == 401) {
+            throw "Invalid webhookURL or webhook Token."
+        }
+
+        SAMMI.alert("Screenshot saved to discord!");
 
     } catch (error) {
-      if (typeof error === 'object') {
-        error = error.error;
-      }
+        if (typeof error === 'object') {
+            error = error.message;
+        }
 
-      if (typeof error === 'string') {
-        lioranboardclient.send(`{"type":"MESSAGE","topic":"AlertMessage","message":"${error}"}`);
-      } else {
+        if (typeof error === 'string')
+            SAMMI.alert(error);
+
         console.error(error)
-      }
+    } finally {
+        await obs.disconnect();
     }
-    obs.disconnect();      
-  })
 }
+
 [insert_over]
 [buttons_3x3]
 activepress="0.000000"
