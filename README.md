@@ -5,6 +5,14 @@
 
 **Note: This is a fork of the original version made by Silverlink to work with OBS Websocket V5 and SAMMI (The successor to LioranBoard).**
 
+## IMPORTANT INSTALLATION INSTRUCTIONS
+As of time of writing, the SAMMI Bridge has not been updated for OBS Websocket V5. You need to remove the references to the old OBS Websocket library from the bottom of your bridge.html. Easiest way is to just delete the line that looks like this (It's near the very bottom):
+```
+<script src="https://cdn.jsdelivr.net/npm/obs-websocket-js@4.0.2/dist/obs-websocket.js"></script>
+```
+
+Once this is done, install the extension normally (SAMMI Bridge Menu -> Install Extension)
+
 For it to work you need to have set up a webhook in your discord.  
 Discord link: https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks
 
